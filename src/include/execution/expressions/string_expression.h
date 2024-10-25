@@ -48,12 +48,12 @@ class StringExpression : public AbstractExpression {
     // TODO(student): implement upper / lower.
     std::string res;
     switch (expr_type_) {
-      case bustub::StringExpressionType::Lower:
-        for (auto &ch : res) {
+      case bustub::StringExpressionType::Upper:
+        for (auto &ch : val) {
           res.push_back(std::toupper(ch));
         }
         break;
-      case bustub::StringExpressionType::Upper:
+      case bustub::StringExpressionType::Lower:
         for (auto &ch : val) {
           res.push_back(std::tolower(ch));
         }
