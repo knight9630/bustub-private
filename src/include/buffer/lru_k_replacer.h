@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
@@ -26,13 +27,44 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
+ public:
+  LRUKNode() = default;
+  LRUKNode(size_t k, frame_id_t fid) : k_(k), fid_(fid) {}
+  LRUKNode(size_t k, frame_id_t fid, size_t time_stamp) : k_(k), fid_(fid) { history_.push_front(time_stamp); }
+  auto GetEvitable() -> bool { return is_evictable_; }
+
+  void SetNodeEvictable(bool evictable) { is_evictable_ = evictable; }
+
+  // 增加访问时间戳
+  void AddTimestamp(size_t timestamp) { history_.push_front(timestamp); }
+
+  // 驱逐清空时间戳
+  void ClearTimestamp() { history_.clear(); }
+
+  // 访问不足k次:最早访问时间与当前时间差（其实相当于FIFO）
+  auto GetFirstDistance(size_t current_stamp) -> size_t { return current_stamp - history_.back(); }
+
+  // 获取前第k次访问的时间戳与当前时间的差（不足k返回无穷大）
+  auto GetKDistance(size_t current_stamp) -> size_t {
+    if (history_.size() < k_) {
+      return UINT32_MAX;
+    }
+    auto recentp = history_.begin();
+    std::advance(recentp, k_ - 1);
+    return current_stamp - *recentp;
+  }
+
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
+  // 帧fid_的历史访问时间戳记录
   [[maybe_unused]] std::list<size_t> history_;
+  // 距离k
   [[maybe_unused]] size_t k_;
+  // 帧id
   [[maybe_unused]] frame_id_t fid_;
+  // 是否可驱逐(可驱逐表示在缓存中，不可驱逐表示不在缓存中)
   [[maybe_unused]] bool is_evictable_{false};
 };
 
@@ -150,10 +182,15 @@ class LRUKReplacer {
  private:
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
+  // 表示磁盘中所有的页（磁盘中叫页page，缓存中叫帧frame）
   [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
   [[maybe_unused]] size_t current_timestamp_{0};
+
+  // 缓存中有的帧的数量，相当于可驱逐的帧的数目(也就是Evitable描述中的the size of replacer!!!)
   [[maybe_unused]] size_t curr_size_{0};
+  // 缓存大小
   [[maybe_unused]] size_t replacer_size_;
+
   [[maybe_unused]] size_t k_;
   [[maybe_unused]] std::mutex latch_;
 };
