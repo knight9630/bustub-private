@@ -85,6 +85,7 @@ class BasicPageGuard {
 
   auto PageId() -> page_id_t { return page_->GetPageId(); }
 
+  // 不可变！！！
   auto GetData() -> const char * { return page_->GetData(); }
 
   template <class T>
@@ -92,6 +93,7 @@ class BasicPageGuard {
     return reinterpret_cast<const T *>(GetData());
   }
 
+  // 可变！！！
   auto GetDataMut() -> char * {
     is_dirty_ = true;
     return page_->GetData();

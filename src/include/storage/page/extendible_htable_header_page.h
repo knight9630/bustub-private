@@ -86,6 +86,7 @@ static_assert(sizeof(page_id_t) == 4);
 static_assert(sizeof(ExtendibleHTableHeaderPage) ==
               sizeof(page_id_t) * HTABLE_HEADER_ARRAY_SIZE + HTABLE_HEADER_PAGE_METADATA_SIZE);
 
+// Hash Table Page的大小也不会超过4096B, 否则将造成内存的非法访问
 static_assert(sizeof(ExtendibleHTableHeaderPage) <= BUSTUB_PAGE_SIZE);
 
 }  // namespace bustub

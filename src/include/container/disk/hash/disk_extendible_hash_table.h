@@ -85,6 +85,9 @@ class DiskExtendibleHashTable {
    */
   auto GetValue(const K &key, std::vector<V> *result, Transaction *transaction = nullptr) const -> bool;
 
+  // 自定义桶合并方法
+  void Merge(ExtendibleHTableDirectoryPage *directory_page, uint32_t bucket_index);
+
   /**
    * Helper function to verify the integrity of the extendible hash table's directory.
    */
