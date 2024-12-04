@@ -59,10 +59,11 @@ auto TableIterator::operator++() -> TableIterator & {
   if (rid_ == stop_at_rid_) {
     rid_ = RID{INVALID_PAGE_ID, 0};
   } else if (next_tuple_id < page->GetNumTuples()) {
-    // that's fine
+    // 还在当前页且slotnum没有越界
   } else {
     auto next_page_id = page->GetNextPageId();
     // if next page is invalid, RID is set to invalid page; otherwise, it's the first tuple in that page.
+    // slotnum越界了，到下一个page
     rid_ = RID{next_page_id, 0};
   }
 

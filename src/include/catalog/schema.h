@@ -34,6 +34,9 @@ class Schema {
    */
   explicit Schema(const std::vector<Column> &columns);
 
+  /**
+   * 从现有 Schema 中选取特定的列并创建一个新的 Schema
+   */
   static auto CopySchema(const Schema *from, const std::vector<uint32_t> &attrs) -> Schema {
     std::vector<Column> cols;
     cols.reserve(attrs.size());
@@ -58,6 +61,7 @@ class Schema {
    * If multiple columns have the same name, the first such index is returned.
    * @param col_name name of column to look for
    * @return the index of a column with the given name, throws an exception if it does not exist
+   * 根据列名获取列索引
    */
   auto GetColIdx(const std::string &col_name) const -> uint32_t {
     if (auto col_idx = TryGetColIdx(col_name)) {

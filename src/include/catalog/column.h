@@ -59,6 +59,7 @@ class Column {
    * Replicate a Column with a different name.
    * @param column_name name of the column
    * @param column the original column
+   *用于创建具有相同属性但不同名称的列。
    */
   Column(std::string column_name, const Column &column)
       : column_name_(std::move(column_name)),
@@ -130,10 +131,14 @@ class Column {
   /** Column value's type. */
   TypeId column_type_;
 
-  /** For a non-inlined column, this is the size of a pointer. Otherwise, the size of the fixed length column. */
+  /** For a non-inlined column, this is the size of a pointer. Otherwise, the size of the fixed length column.
+   *固定长度列的字节数，或非固定长度列指针的大小
+   */
   uint32_t fixed_length_;
 
-  /** For an inlined column, 0. Otherwise, the length of the variable length column. */
+  /** For an inlined column, 0. Otherwise, the length of the variable length column.
+   *对于变长列（如 VARCHAR），表示其最大长度；对于固定长度列，此值为 0
+   */
   uint32_t variable_length_{0};
 
   /** Column offset in the tuple. */

@@ -203,7 +203,7 @@ class Catalog {
    * @param table_name The name of the table
    * @param schema The schema of the table
    * @param key_schema The schema of the key
-   * @param key_attrs Key attributes
+   * @param key_attrs Key attributes，表示用那几列建索引
    * @param keysize Size of the key
    * @param hash_function The hash function for the index
    * @return A (non-owning) pointer to the metadata of the new table

@@ -48,6 +48,7 @@ Tuple::Tuple(std::vector<Value> values, const Schema *schema) {
       // Serialize relative offset, where the actual varchar data is stored.
       *reinterpret_cast<uint32_t *>(data_.data() + col.GetOffset()) = offset;
       // Serialize varchar value, in place (size+data).
+      // 序列化
       values[i].SerializeTo(data_.data() + offset);
       auto len = values[i].GetLength();
       if (len == BUSTUB_VALUE_NULL) {
@@ -65,9 +66,11 @@ auto Tuple::GetValue(const Schema *schema, const uint32_t column_idx) const -> V
   const TypeId column_type = schema->GetColumn(column_idx).GetType();
   const char *data_ptr = GetDataPtr(schema, column_idx);
   // the third parameter "is_inlined" is unused
+  // 反序列化
   return Value::DeserializeFrom(data_ptr, column_type);
 }
 
+// 根据索引中的schema获取对应的tuple
 auto Tuple::KeyFromTuple(const Schema &schema, const Schema &key_schema,
                          const std::vector<uint32_t> &key_attrs) -> Tuple {
   std::vector<Value> values;

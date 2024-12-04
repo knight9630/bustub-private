@@ -100,18 +100,12 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Size() const -> uint32_t {
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::IsFull() const -> bool {
-  if (size_ < max_size_) {
-    return false;
-  }
-  return true;
+  return !(size_ < max_size_);
 }
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::IsEmpty() const -> bool {
-  if (size_ == 0) {
-    return true;
-  }
-  return false;
+  return size_ == 0;
 }
 
 template class ExtendibleHTableBucketPage<int, int, IntComparator>;

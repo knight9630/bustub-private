@@ -34,6 +34,8 @@ class TablePage;
 /**
  * TableHeap represents a physical table on disk.
  * This is just a doubly-linked list of pages.
+ * 个人感觉只是一个单向链表，从first_page_id到last_page_id
+ * 虽然说在创建新page的page_id只是由上一个page_id加一得到，但似乎和双向链表并不相关
  */
 class TableHeap {
   friend class TableIterator;
@@ -53,6 +55,7 @@ class TableHeap {
    * @param meta tuple meta
    * @param tuple tuple to insert
    * @return rid of the inserted tuple
+   *将元组插入表中。如果元组的大小超过页面限制，插入失败并返回空值。
    */
   auto InsertTuple(const TupleMeta &meta, const Tuple &tuple, LockManager *lock_mgr = nullptr,
                    Transaction *txn = nullptr, table_oid_t oid = 0) -> std::optional<RID>;
@@ -61,6 +64,7 @@ class TableHeap {
    * Update the meta of a tuple.
    * @param meta new tuple meta
    * @param rid the rid of the inserted tuple
+   *根据给定的行标识符（RID），更新元组的元数据（如事务状态）。
    */
   void UpdateTupleMeta(const TupleMeta &meta, RID rid);
 
@@ -68,6 +72,7 @@ class TableHeap {
    * Read a tuple from the table.
    * @param rid rid of the tuple to read
    * @return the meta and tuple
+   *读取指定 RID 的元组及其元数据。用于从表中获取完整的行数据。
    */
   auto GetTuple(RID rid) -> std::pair<TupleMeta, Tuple>;
 
@@ -76,18 +81,20 @@ class TableHeap {
    * to ensure atomicity.
    * @param rid rid of the tuple to read
    * @return the meta
+   *仅获取元组的元数据。如果需要元组本身，建议使用 GetTuple。
    */
   auto GetTupleMeta(RID rid) -> TupleMeta;
 
-  /** @return the iterator of this table. When this iterator is created, it will record the current last tuple in the
-   * table heap, and the iterator will stop at that point, in order to avoid halloween problem. You usually will need to
-   * use this function for project 3. Given that you have already implemented your project 4 update executor as a
-   * pipeline breaker, you may use `MakeEagerIterator` to test whether the update executor is implemented correctly.
-   * There should be no difference between this function and `MakeEagerIterator` in project 4 if everything is
-   * implemented correctly. */
+  /** @return 当创建此表的迭代器时，它会记录当前表堆（table heap）中最后一个元组的位置，并且迭代器会在此位置停止，以避免
+   *Halloween 问题（同一元组被多次更新的问题）。在项目 3 中，你通常需要使用此函数。
+   *鉴于你已经在项目 4 中实现了作为流水线中断点的更新执行器（update executor），可以使用 MakeEagerIterator
+   *来测试更新执行器是否正确实现。如果所有内容都正确实现，则此函数和项目 4 中的 MakeEagerIterator 之间不应存在任何区别。
+   */
   auto MakeIterator() -> TableIterator;
 
-  /** @return the iterator of this table. The iterator will stop at the last tuple at the time of iterating. */
+  /** @return the iterator of this table. The iterator will stop at the last tuple at the time of iterating.
+   *和 MakeIterator 类似，但迭代器在运行时会动态更新结束位置。
+   */
   auto MakeEagerIterator() -> TableIterator;
 
   /** @return the id of the first page of this table */
@@ -100,6 +107,7 @@ class TableHeap {
    * @param tuple  new tuple
    * @param rid the rid of the tuple to be updated
    * @param check the check to run before actually update.
+   *在原地更新指定 RID 的元组。更新前可通过可选的检查函数验证条件。
    */
   auto UpdateTupleInPlace(const TupleMeta &meta, const Tuple &tuple, RID rid,
                           std::function<bool(const TupleMeta &meta, const Tuple &table, RID rid)> &&check = nullptr)

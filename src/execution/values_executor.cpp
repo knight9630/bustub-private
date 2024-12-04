@@ -8,6 +8,7 @@ ValuesExecutor::ValuesExecutor(ExecutorContext *exec_ctx, const ValuesPlanNode *
 void ValuesExecutor::Init() { cursor_ = 0; }
 
 auto ValuesExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  std::cout << "ValuesExecutor:" << plan_->ToString() << std::endl;
   if (cursor_ >= plan_->GetValues().size()) {
     return false;
   }

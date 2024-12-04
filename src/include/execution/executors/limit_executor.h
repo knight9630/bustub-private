@@ -14,9 +14,11 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/limit_plan.h"
+#include "storage/table/tuple.h"
 
 namespace bustub {
 
@@ -54,5 +56,8 @@ class LimitExecutor : public AbstractExecutor {
 
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+
+  std::vector<Tuple> limited_tuples_;
+  std::vector<Tuple>::iterator limited_iter_;
 };
 }  // namespace bustub
