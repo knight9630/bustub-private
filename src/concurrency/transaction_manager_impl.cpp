@@ -38,6 +38,7 @@ auto TransactionManager::UpdateUndoLink(RID rid, std::optional<UndoLink> prev_li
                            check != nullptr ? wrapper_func : nullptr);
 }
 
+// 更新Page中的元组的VersionUndoLink
 auto TransactionManager::UpdateVersionLink(RID rid, std::optional<VersionUndoLink> prev_version,
                                            std::function<bool(std::optional<VersionUndoLink>)> &&check) -> bool {
   std::unique_lock<std::shared_mutex> lck(version_info_mutex_);
@@ -69,6 +70,7 @@ auto TransactionManager::UpdateVersionLink(RID rid, std::optional<VersionUndoLin
   return true;
 }
 
+// 取最新的VersionUndoLink
 auto TransactionManager::GetVersionLink(RID rid) -> std::optional<VersionUndoLink> {
   std::shared_lock<std::shared_mutex> lck(version_info_mutex_);
   auto iter = version_info_.find(rid.GetPageId());
@@ -85,6 +87,7 @@ auto TransactionManager::GetVersionLink(RID rid) -> std::optional<VersionUndoLin
   return std::make_optional(iter2->second);
 }
 
+// 取最新的UndoLink
 auto TransactionManager::GetUndoLink(RID rid) -> std::optional<UndoLink> {
   auto version_link = GetVersionLink(rid);
   if (version_link.has_value()) {
@@ -93,6 +96,9 @@ auto TransactionManager::GetUndoLink(RID rid) -> std::optional<UndoLink> {
   return std::nullopt;
 }
 
+// 这个函数可以应对undolog被删除的情况
+// undolog被删除时，undologlik还在
+// 那么就会发生undolink能找到但是undolog不存在的情况，从而返回nullopt
 auto TransactionManager::GetUndoLogOptional(UndoLink link) -> std::optional<UndoLog> {
   std::shared_lock<std::shared_mutex> lck(txn_map_mutex_);
   auto iter = txn_map_.find(link.prev_txn_);

@@ -36,7 +36,6 @@ class ColumnValueExpression : public AbstractExpression {
       : AbstractExpression({}, ret_type), tuple_idx_{tuple_idx}, col_idx_{col_idx} {}
 
   auto Evaluate(const Tuple *tuple, const Schema &schema) const -> Value override {
-    std::cout << "ColumnValueExpression" << std::endl;
     return tuple->GetValue(&schema, col_idx_);
   }
 

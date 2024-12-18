@@ -40,6 +40,10 @@ class TransactionManager;
 
 /**
  * Transaction State.
+ * 事务正在执行中
+ * 事务被标记为脏的，可能是由于某些异常导致需要回滚。
+ * 事务已提交。
+ * 事务已回滚或放弃。
  */
 enum class TransactionState { RUNNING = 0, TAINTED, COMMITTED = 100, ABORTED };
 
@@ -53,9 +57,13 @@ class Catalog;
 using table_oid_t = uint32_t;
 using index_oid_t = uint32_t;
 
-/** Represents a link to a previous version of this tuple */
+/** Represents a link to a previous version of this tuple
+ * 表示回滚操作的前置链接,此元组的先前版本的链接
+ */
 struct UndoLink {
-  /* Previous version can be found in which txn */
+  /* Previous version can be found in which txn
+   * 也就是修改该元组的事务id，也是该UndoLog所在的undo_logs所在的事务
+   */
   txn_id_t prev_txn_{INVALID_TXN_ID};
   /* The log index of the previous version in `prev_txn_` */
   int prev_log_idx_{0};
@@ -70,6 +78,7 @@ struct UndoLink {
   auto IsValid() const -> bool { return prev_txn_ != INVALID_TXN_ID; }
 };
 
+/** 事务回滚日志，记录了事务修改的数据及相关信息 */
 struct UndoLog {
   /* Whether this log is a deletion marker */
   bool is_deleted_;
@@ -77,7 +86,9 @@ struct UndoLog {
   std::vector<bool> modified_fields_;
   /* The modified fields */
   Tuple tuple_;
-  /* Timestamp of this undo log */
+  /* Timestamp of this undo log
+   * 旧元组的时间戳
+   */
   timestamp_t ts_{INVALID_TS};
   /* Undo log prev version */
   UndoLink prev_version_{};

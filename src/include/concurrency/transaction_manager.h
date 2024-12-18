@@ -35,7 +35,9 @@ struct VersionUndoLink {
   /** The next version in the version chain. */
   UndoLink prev_;
   /** Whether a transaction is modifying the version link. Fall 2023: you do not need to read / write this field until
-   * task 4.2. */
+   * task 4.2.
+   * 表示是否有事务正在修改这个链接
+   */
   bool in_progress_{false};
 
   friend auto operator==(const VersionUndoLink &a, const VersionUndoLink &b) {
@@ -64,6 +66,7 @@ class TransactionManager {
    * Begins a new transaction.
    * @param isolation_level an optional isolation level of the transaction.
    * @return an initialized transaction
+   * 开始一个新的事务，初始化事务对象并返回指针。
    */
   auto Begin(IsolationLevel isolation_level = IsolationLevel::SNAPSHOT_ISOLATION) -> Transaction *;
 
@@ -71,18 +74,21 @@ class TransactionManager {
    * Commits a transaction.
    * @param txn the transaction to commit, the txn will be managed by the txn manager so no need to delete it by
    * yourself
+   * 提交事务
    */
   auto Commit(Transaction *txn) -> bool;
 
   /**
    * Aborts a transaction
    * @param txn the transaction to abort, the txn will be managed by the txn manager so no need to delete it by yourself
+   * 当事务被终止时，撤销未提交的操作，确保数据库状态的一致性。
    */
   void Abort(Transaction *txn);
 
   /**
    * @brief Use this function before task 4.2. Update an undo link that links table heap tuple to the first undo log.
    * Before updating, `check` function will be called to ensure validity.
+   * 通过 RID（行标识符）更新元组的撤销日志或版本链。(4.2前)
    */
   auto UpdateUndoLink(RID rid, std::optional<UndoLink> prev_link,
                       std::function<bool(std::optional<UndoLink>)> &&check = nullptr) -> bool;
@@ -90,14 +96,19 @@ class TransactionManager {
   /**
    * @brief Use this function after task 4.2. Update an undo link that links table heap tuple to the first undo log.
    * Before updating, `check` function will be called to ensure validity.
+   * 通过 RID（行标识符）更新元组的撤销日志或版本链。（4.2后）
    */
   auto UpdateVersionLink(RID rid, std::optional<VersionUndoLink> prev_version,
                          std::function<bool(std::optional<VersionUndoLink>)> &&check = nullptr) -> bool;
 
-  /** @brief Get the first undo log of a table heap tuple. Use this before task 4.2 */
+  /** @brief Get the first undo log of a table heap tuple. Use this before task 4.2
+   * 访问元组的撤销日志或版本链（4.2前）
+   */
   auto GetUndoLink(RID rid) -> std::optional<UndoLink>;
 
-  /** @brief Get the first undo log of a table heap tuple. Use this after task 4.2 */
+  /** @brief Get the first undo log of a table heap tuple. Use this after task 4.2
+   * 访问元组的撤销日志或版本链（4.2后）
+   */
   auto GetVersionLink(RID rid) -> std::optional<VersionUndoLink>;
 
   /** @brief Access the transaction undo log buffer and get the undo log. Return nullopt if the txn does not exist. Will
@@ -121,6 +132,7 @@ class TransactionManager {
   /** All transactions, running or committed */
   std::unordered_map<txn_id_t, std::shared_ptr<Transaction>> txn_map_;
 
+  /** 用于存储表堆中每个页面的版本信息，包括元组的版本链。 */
   struct PageVersionInfo {
     /** protects the map */
     std::shared_mutex mutex_;
@@ -133,10 +145,14 @@ class TransactionManager {
   /** protects version info */
   std::shared_mutex version_info_mutex_;
   /** Stores the previous version of each tuple in the table heap. Do not directly access this field. Use the helper
-   * functions in `transaction_manager_impl.cpp`. */
+   * functions in `transaction_manager_impl.cpp`.
+   * 存储表堆中每个元组的最近的前一个版本信息。
+   */
   std::unordered_map<page_id_t, std::shared_ptr<PageVersionInfo>> version_info_;
 
-  /** Stores all the read_ts of running txns so as to facilitate garbage collection. */
+  /** Stores all the read_ts of running txns so as to facilitate garbage collection.
+   * 记录所有读时间戳
+   */
   Watermark running_txns_{0};
 
   /** Only one txn is allowed to commit at a time */

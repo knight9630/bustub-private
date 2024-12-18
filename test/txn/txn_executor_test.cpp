@@ -5,7 +5,7 @@ namespace bustub {
 
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 
-TEST(TxnExecutorTest, DISABLED_InsertTest) {  // NOLINT
+TEST(TxnExecutorTest, InsertTest) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
   Execute(*bustub, "CREATE TABLE maintable(a int)");
@@ -31,7 +31,7 @@ TEST(TxnExecutorTest, DISABLED_InsertTest) {  // NOLINT
   WithTxn(txn_ref, QueryShowResult(*bustub, _var, _txn, query, empty_table));
 }
 
-TEST(TxnExecutorTest, DISABLED_InsertCommitTest) {  // NOLINT
+TEST(TxnExecutorTest, InsertCommitTest) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   Execute(*bustub, "CREATE TABLE maintable(a int)");
   auto table_info = bustub->catalog_->GetTable("maintable");
@@ -73,7 +73,7 @@ TEST(TxnExecutorTest, DISABLED_InsertCommitTest) {  // NOLINT
   WithTxn(txn_ref, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1}}));
 }
 
-TEST(TxnExecutorTest, DISABLED_InsertDeleteTest) {  // NOLINT
+TEST(TxnExecutorTest, InsertDeleteTest) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
   Execute(*bustub, "CREATE TABLE maintable(a int)");
@@ -122,7 +122,7 @@ TEST(TxnExecutorTest, DISABLED_InsertDeleteTest) {  // NOLINT
   WithTxn(txn_ref, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1}, {2}}));
 }
 
-TEST(TxnExecutorTest, DISABLED_InsertDeleteConflictTest) {  // NOLINT
+TEST(TxnExecutorTest, InsertDeleteConflictTest) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
   Execute(*bustub, "CREATE TABLE maintable(a int)");
@@ -186,7 +186,7 @@ TEST(TxnExecutorTest, DISABLED_InsertDeleteConflictTest) {  // NOLINT
   WithTxn(txn7, CommitTxn(*bustub, _var, _txn));
 }
 
-TEST(TxnExecutorTest, DISABLED_UpdateTest1) {  // NOLINT
+TEST(TxnExecutorTest, UpdateTest1) {  // NOLINT
   fmt::println(stderr, "--- UpdateTest1: no undo log ---");
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
@@ -253,7 +253,7 @@ TEST(TxnExecutorTest, DISABLED_UpdateTest1) {  // NOLINT
   TableHeapEntryNoMoreThan(*bustub, table_info, 1);
 }
 
-TEST(TxnExecutorTest, DISABLED_UpdateTest2) {  // NOLINT
+TEST(TxnExecutorTest, UpdateTest2) {  // NOLINT
   fmt::println(stderr, "--- UpdateTest2: update applied on insert ---");
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
@@ -263,18 +263,21 @@ TEST(TxnExecutorTest, DISABLED_UpdateTest2) {  // NOLINT
   WithTxn(txn0, ExecuteTxn(*bustub, _var, _txn, "INSERT INTO table2 VALUES (1, 1, 1)"));
   WithTxn(txn0, CommitTxn(*bustub, _var, _txn));
   TxnMgrDbg("after insert and commit", bustub->txn_manager_.get(), table_info, table_info->table_.get());
+
   auto txn1 = BeginTxn(*bustub, "txn1");
   auto txn_ref = BeginTxn(*bustub, "txn_ref");
   const std::string query = "SELECT * FROM table2";
   fmt::println(stderr, "A: 1st update");
   WithTxn(txn1, ExecuteTxn(*bustub, _var, _txn, "UPDATE table2 SET b = 2"));
   TxnMgrDbg("after update", bustub->txn_manager_.get(), table_info, table_info->table_.get());
+
   WithTxn(txn1, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 2, 1}}));
   WithTxn(txn_ref, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 1, 1}}));
   WithTxn(txn1, CheckUndoLogColumn(*bustub, _var, _txn, 1));
   fmt::println(stderr, "B: 2nd update");
   WithTxn(txn1, ExecuteTxn(*bustub, _var, _txn, "UPDATE table2 SET b = 3"));
   TxnMgrDbg("after update", bustub->txn_manager_.get(), table_info, table_info->table_.get());
+
   WithTxn(txn1, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 3, 1}}));
   WithTxn(txn_ref, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 1, 1}}));
   WithTxn(txn1, CheckUndoLogColumn(*bustub, _var, _txn, 1));
@@ -325,7 +328,7 @@ TEST(TxnExecutorTest, DISABLED_UpdateTest2) {  // NOLINT
   TableHeapEntryNoMoreThan(*bustub, table_info, 1);
 }
 
-TEST(TxnExecutorTest, DISABLED_UpdateTestWithUndoLog) {  // NOLINT
+TEST(TxnExecutorTest, UpdateTestWithUndoLog) {  // NOLINT
   fmt::println(stderr, "--- UpdateTestWithUndoLog: update applied on a version chain with undo log ---");
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
@@ -411,7 +414,7 @@ TEST(TxnExecutorTest, DISABLED_UpdateTestWithUndoLog) {  // NOLINT
   TableHeapEntryNoMoreThan(*bustub, table_info, 1);
 }
 
-TEST(TxnExecutorTest, DISABLED_UpdateConflict) {  // NOLINT
+TEST(TxnExecutorTest, UpdateConflict) {  // NOLINT
   {
     fmt::println(stderr, "--- UpdateConflict1: simple case, insert and two txn update it ---");
     auto bustub = std::make_unique<BustubInstance>();
@@ -464,7 +467,7 @@ TEST(TxnExecutorTest, DISABLED_UpdateConflict) {  // NOLINT
   }
 }
 
-TEST(TxnExecutorTest, DISABLED_GarbageCollection) {  // NOLINT
+TEST(TxnExecutorTest, GarbageCollection) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
   Execute(*bustub, "CREATE TABLE table1(a int, b int, c int)");
@@ -602,7 +605,7 @@ TEST(TxnExecutorTest, DISABLED_GarbageCollection) {  // NOLINT
   WithTxn(txn3, EnsureTxnGCed(*bustub, _var, txn3_id));
 }
 
-TEST(TxnExecutorTest, DISABLED_GarbageCollectionWithTainted) {  // NOLINT
+TEST(TxnExecutorTest, GarbageCollectionWithTainted) {  // NOLINT
   auto empty_table = IntResult{};
   auto bustub = std::make_unique<BustubInstance>();
   Execute(*bustub, "CREATE TABLE table1(a int, b int, c int)");

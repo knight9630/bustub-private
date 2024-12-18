@@ -24,7 +24,7 @@ void WindowFunctionExecutor::Init() {
     sorted_tuples.emplace_back(tuple);
   }
 
-  // 文档中说明各个窗口函数中只会有一个相同的order by
+  // 文档中说明各个窗口函数中只会有一个相同的order by,所以先直接将所有的tuple排序
   std::vector<std::pair<OrderByType, AbstractExpressionRef>> one_order;
   for (const auto &window_function : plan_->window_functions_) {
     if (!window_function.second.order_by_.empty()) {

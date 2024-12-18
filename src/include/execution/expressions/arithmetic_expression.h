@@ -45,7 +45,6 @@ class ArithmeticExpression : public AbstractExpression {
   }
 
   auto Evaluate(const Tuple *tuple, const Schema &schema) const -> Value override {
-    std::cout << "ArithmeticExpression" << std::endl;
     Value lhs = GetChildAt(0)->Evaluate(tuple, schema);
     Value rhs = GetChildAt(1)->Evaluate(tuple, schema);
     auto res = PerformComputation(lhs, rhs);
