@@ -65,6 +65,7 @@ class InsertExecutor : public AbstractExecutor {
   bool has_inserted_;
   const TableInfo *table_info_;
   const IndexInfo *primary_key_index_ = nullptr;
+  int count_ = 0;
 };
 
 }  // namespace bustub

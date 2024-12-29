@@ -27,6 +27,7 @@ void InsertExecutor::Init() {
   child_executor_->Init();
   has_inserted_ = false;
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid());
+  count_ = 0;
   auto table_indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
   // 获取主键索引（只会有一个）
   for (const auto &table_index_info : table_indexes) {
@@ -42,8 +43,6 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (has_inserted_) {
     return false;
   }
-  has_inserted_ = true;
-  int count = 0;
 
   auto tnx = exec_ctx_->GetTransaction();
   auto tnx_mgr = exec_ctx_->GetTransactionManager();
@@ -51,13 +50,17 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   Tuple child_tuple = {};
   RID child_rid = {};
   while (child_executor_->Next(&child_tuple, &child_rid)) {
-    std::cout << std::this_thread::get_id() << std::endl;
+    has_inserted_ = true;
     std::cout << "insert_executor" << std::endl;
     InsertFunction(exec_ctx_, child_schema, primary_key_index_, table_info_, tnx, tnx_mgr, child_tuple, child_rid);
-    count++;
+    count_++;
   }
 
-  std::vector<Value> res{{TypeId::INTEGER, count}};
+  if (!has_inserted_) {
+    has_inserted_ = true;
+    return false;
+  }
+  std::vector<Value> res{{TypeId::INTEGER, count_}};
   *tuple = Tuple(res, &GetOutputSchema());
   return true;
 }

@@ -46,12 +46,15 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto tnx_mgr = exec_ctx_->GetTransactionManager();
   Schema child_schema = child_executor_->GetOutputSchema();
   while (child_executor_->Next(&child_tuple, &child_rid)) {
-    std::cout << std::this_thread::get_id() << std::endl;
     std::cout << "delete_executor" << std::endl;
     DeleteFunction(exec_ctx_, child_schema, table_info_, tnx, tnx_mgr, child_tuple, child_rid);
     count++;
   }
 
+  if (!has_deleted_) {
+    has_deleted_ = true;
+    return false;
+  }
   std::vector<Value> res{{TypeId::INTEGER, count}};
   *tuple = Tuple(res, &plan_->OutputSchema());
 

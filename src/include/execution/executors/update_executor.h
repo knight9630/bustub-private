@@ -72,6 +72,6 @@ class UpdateExecutor : public AbstractExecutor {
 
   bool has_updated_;
   const IndexInfo *primary_key_index_ = nullptr;
-  std::mutex mt;
+  int count_ = 0;
 };
 }  // namespace bustub

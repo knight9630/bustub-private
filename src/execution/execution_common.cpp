@@ -271,41 +271,42 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
   if (new_insert) {
     // 1.将新创建的元组的时间戳设置为当前事务的id
     RID new_rid = table_info_->table_->InsertTuple(TupleMeta{tnx->GetTransactionTempTs(), false}, child_tuple).value();
-    // 2.在版本链中插入一个占位空值
-    if (tnx_mgr->UpdateUndoLink(new_rid, std::nullopt, nullptr)) {
-      std::cout << "insert UndoLink插入成功" << std::endl;
-    } else {
-      std::cout << "insert UndoLink插入失败" << std::endl;
-    }
-    // 3.添加索引
+
+    // 2.添加索引
     if (primary_key_index_ != nullptr) {
-      auto key = child_tuple.KeyFromTuple(table_info_->schema_, primary_key_index_->key_schema_,
-                                          primary_key_index_->index_->GetKeyAttrs());
-      bool insert_index = primary_key_index_->index_->InsertEntry(key, new_rid, exec_ctx_->GetTransaction());
+      auto new_key = child_tuple.KeyFromTuple(table_info_->schema_, primary_key_index_->key_schema_,
+                                              primary_key_index_->index_->GetKeyAttrs());
+      bool insert_index = primary_key_index_->index_->InsertEntry(new_key, new_rid, exec_ctx_->GetTransaction());
       if (!insert_index) {
+        table_info_->table_->UpdateTupleMeta({tnx->GetTransactionTempTs(), true}, new_rid);
         tnx->SetTainted();
         throw ExecutionException("Error appears when insert index during tuple insert");
       }
+    }
+    // 3.在版本链中插入一个占位空值
+    if (tnx_mgr->UpdateUndoLink(new_rid, UndoLink{}, nullptr)) {
+      std::cout << "insert UndoLink插入成功" << std::endl;
+    } else {
+      std::cout << "insert UndoLink插入失败" << std::endl;
     }
     // 4.将创建的元组rid添加到当前事务的write set中
     tnx->AppendWriteSet(table_info_->oid_, new_rid);
   } else {
     //
     // 原索引还在，相同索引的元组存在（标记删除）,将新插入的元组放在老元组的位置
-    TupleMeta child_tm = table_info_->table_->GetTupleMeta(existed_rid);
     // 被当前事务修改,更新undo_log（这里其实不变）
-    if (CheckSelfModify(child_tm, tnx)) {
+    bool self_modify = CheckSelfModify(table_info_->table_->GetTupleMeta(existed_rid), tnx);
+    if (self_modify) {
       auto undo_log_link_opt = tnx_mgr->GetUndoLink(existed_rid);
       if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
         UndoLog new_undolog = UpdateUndoLog(tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_), child_tuple, {}, true,
                                             false, &child_schema);
         tnx->ModifyUndoLog(undo_log_link_opt->prev_log_idx_, new_undolog);
       }
-      tnx->AppendWriteSet(table_info_->oid_, existed_rid);
       table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, child_tuple, existed_rid, nullptr);
     } else {
       // 检查写写冲突
-      if (CheckwwConflict(child_tm, tnx, tnx_mgr)) {
+      if (CheckwwConflict(table_info_->table_->GetTupleMeta(existed_rid), tnx, tnx_mgr)) {
         InProcessUnlock(exec_ctx_, existed_rid);
         tnx->SetTainted();
         throw ExecutionException("wwconflict happen when insert ");
@@ -319,7 +320,8 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
       }
 
       // 被其它事务修改，添加undo_log（其实是个空的）
-      UndoLog new_undolog = GenerateUndoLog(child_tuple, {}, true, false, child_tm.ts_, &child_schema);
+      UndoLog new_undolog = GenerateUndoLog(child_tuple, {}, true, false,
+                                            table_info_->table_->GetTupleMeta(existed_rid).ts_, &child_schema);
       // 将之前最新的UndoLink作为新添加的UndoLog的前一个版本
       auto prev_link = tnx_mgr->GetUndoLink(existed_rid);
       if (prev_link.has_value()) {
@@ -335,23 +337,24 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
       } else {
         std::cout << "Insert update versionlink fail" << std::endl;
       }
-      tnx->AppendWriteSet(table_info_->oid_, existed_rid);
       table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, child_tuple, existed_rid, nullptr);
       InProcessUnlock(exec_ctx_, existed_rid);
     }
+    table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, child_tuple, existed_rid, nullptr);
+    tnx->AppendWriteSet(table_info_->oid_, existed_rid);
   }
 }
 
 void DeleteFunction(ExecutorContext *exec_ctx_, Schema child_schema, const TableInfo *table_info_, Transaction *tnx,
                     TransactionManager *tnx_mgr, const Tuple &child_tuple, const RID &child_rid) {
-  TupleMeta child_tm = table_info_->table_->GetTupleMeta(child_rid);
-
+  bool self_modify = CheckSelfModify(table_info_->table_->GetTupleMeta(child_rid), tnx);
   // 被当前事务修改,更新undo_log
-  if (CheckSelfModify(child_tm, tnx)) {
+  if (self_modify) {
     auto undo_log_link_opt = tnx_mgr->GetUndoLink(child_rid);
     if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
-      UndoLog new_undolog = UpdateUndoLog(tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_), child_tuple, {},
-                                          child_tm.is_deleted_, true, &child_schema);
+      UndoLog new_undolog =
+          UpdateUndoLog(tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_), child_tuple, {},
+                        table_info_->table_->GetTupleMeta(child_rid).is_deleted_, true, &child_schema);
       tnx->ModifyUndoLog(undo_log_link_opt->prev_log_idx_, new_undolog);
     }
     tnx->AppendWriteSet(table_info_->oid_, child_rid);
@@ -366,14 +369,15 @@ void DeleteFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Table
       throw ExecutionException("change in_process fail when delete ");
     }
 
-    if (CheckwwConflict(child_tm, tnx, tnx_mgr)) {
+    if (CheckwwConflict(table_info_->table_->GetTupleMeta(child_rid), tnx, tnx_mgr)) {
       InProcessUnlock(exec_ctx_, child_rid);
       tnx->SetTainted();
       throw ExecutionException("wwconflict happen when delete ");
     }
 
     // 被其它事务修改，添加undo_log
-    UndoLog new_undolog = GenerateUndoLog(child_tuple, {}, child_tm.is_deleted_, true, child_tm.ts_, &child_schema);
+    UndoLog new_undolog = GenerateUndoLog(child_tuple, {}, table_info_->table_->GetTupleMeta(child_rid).is_deleted_,
+                                          true, table_info_->table_->GetTupleMeta(child_rid).ts_, &child_schema);
 
     // 将之前最新的UndoLink作为新添加的UndoLog的前一个版本
     auto prev_link = tnx_mgr->GetUndoLink(child_rid);

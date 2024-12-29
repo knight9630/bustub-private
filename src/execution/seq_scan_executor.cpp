@@ -38,6 +38,7 @@ void SeqScanExecutor::Init() {
 
 // 从当前位置开始遍历，如果删除或者不满足过滤条件的tuple则检查下一个
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  std::cout << "seq_scan_executor" << std::endl;
   std::pair<TupleMeta, Tuple> meta_and_tuple{};
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid());
   bool if_find = false;
@@ -58,12 +59,14 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
      * 情况三：当前事务读取时间戳小于表堆中元组的时间戳，去undo_log中去看有没有符合要求的版本
      */
     if (tnx->GetTransactionTempTs() == seq_meta.ts_ || tnx->GetReadTs() >= seq_meta.ts_) {
+      std::cout << "read table_heap" << std::endl;
       *tuple = seq_tuple;
       *rid = seq_tuple.GetRid();
       if (!seq_meta.is_deleted_) {
         if_find = true;
       }
     } else {
+      std::cout << "read undolog" << std::endl;
       std::vector<UndoLog> undo_logs;
       // 由undo_log_link得到undo_log
       auto undo_log_link_opt = tnx_mgr->GetUndoLink(seq_tuple.GetRid());
