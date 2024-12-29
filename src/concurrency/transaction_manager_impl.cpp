@@ -62,6 +62,7 @@ auto TransactionManager::UpdateVersionLink(RID rid, std::optional<VersionUndoLin
       return false;
     }
   }
+
   if (prev_version.has_value()) {
     pg_ver_info->prev_version_[rid.GetSlotNum()] = *prev_version;
   } else {

@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -70,5 +71,7 @@ class UpdateExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> child_executor_;
 
   bool has_updated_;
+  const IndexInfo *primary_key_index_ = nullptr;
+  std::mutex mt;
 };
 }  // namespace bustub

@@ -15,10 +15,13 @@
 #include <memory>
 #include <utility>
 
+#include "catalog/catalog.h"
 #include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/insert_plan.h"
+#include "storage/index/index.h"
 #include "storage/table/tuple.h"
 
 namespace bustub {
@@ -60,6 +63,8 @@ class InsertExecutor : public AbstractExecutor {
   const InsertPlanNode *plan_;
   std::unique_ptr<AbstractExecutor> child_executor_;
   bool has_inserted_;
+  const TableInfo *table_info_;
+  const IndexInfo *primary_key_index_ = nullptr;
 };
 
 }  // namespace bustub

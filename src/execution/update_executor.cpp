@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 #include <memory>
 #include <optional>
+#include <vector>
+#include "catalog/schema.h"
 #include "common/exception.h"
 #include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
@@ -32,94 +34,127 @@ void UpdateExecutor::Init() {
   child_executor_->Init();
   has_updated_ = false;
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid());
+  auto table_indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+  // 获取主键索引（只会有一个）
+  for (const auto &table_index_info : table_indexes) {
+    if (table_index_info->is_primary_key_) {
+      primary_key_index_ = table_index_info;
+      break;
+    }
+  }
 }
 
 auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  for (const auto &target_expression : plan_->target_expressions_) {
-    if (target_expression != nullptr) {
-      std::cout << target_expression->ToString() << std::endl;
-    }
-  }
   if (has_updated_) {
     return false;
   }
   has_updated_ = true;
   int count = 0;
-  auto table_indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
   Tuple child_tuple = {};
   RID child_rid = {};
 
   auto tnx = exec_ctx_->GetTransaction();
   auto tnx_mgr = exec_ctx_->GetTransactionManager();
+  bool primary_change = false;
   while (child_executor_->Next(&child_tuple, &child_rid)) {
-    // p3版本
-    /**
-    // 将原tuple标记为已删除，插入新的tuple(Table_page中没有deletetuple，虽然我觉得从内存中删除可能会更好)
-    table_info_->table_->UpdateTupleMeta(TupleMeta{0, true}, child_rid);
-    std::vector<Value> update_values;
-    update_values.reserve(plan_->target_expressions_.size());
-    for (const auto &expr : plan_->target_expressions_) {
-      update_values.push_back(expr->Evaluate(&child_tuple, child_executor_->GetOutputSchema()));
-    }
-    Tuple update_tuple(update_values, &table_info_->schema_);
-
-    std::optional<RID> oprid = table_info_->table_->InsertTuple(TupleMeta{0, false}, update_tuple);
-    RID update_rid = oprid.value();
-    // 更新索引,删除原索引，插入新索引
-    for (auto &index_info : table_indexes) {
-      auto index = index_info->index_.get();
-      auto key_attrs = index_info->index_->GetKeyAttrs();
-      auto old_key = child_tuple.KeyFromTuple(table_info_->schema_, *index->GetKeySchema(), key_attrs);
-      index->DeleteEntry(old_key, child_rid, exec_ctx_->GetTransaction());
-      auto update_key = update_tuple.KeyFromTuple(table_info_->schema_, *index->GetKeySchema(), key_attrs);
-      index->InsertEntry(update_key, update_rid, exec_ctx_->GetTransaction());
-    }*/
+    std::cout << "线程id" << std::this_thread::get_id() << std::endl;
+    std::cout << "update_executor" << std::endl;
+    std::cout << "更新前元组:" << child_tuple.GetValue(&child_executor_->GetOutputSchema(), 0).GetAs<int>() << " "
+              << child_tuple.GetValue(&child_executor_->GetOutputSchema(), 1).GetAs<int>() << std::endl;
     TupleMeta child_tm = table_info_->table_->GetTupleMeta(child_rid);
-    // 检查写写冲突
-    if (CheckwwConflict(child_tm, tnx)) {
-      tnx->SetTainted();
-      throw ExecutionException("wwconflict happen when update ");
-    }
-
     std::vector<Value> update_values;
     update_values.reserve(plan_->target_expressions_.size());
     for (const auto &expr : plan_->target_expressions_) {
       update_values.push_back(expr->Evaluate(&child_tuple, child_executor_->GetOutputSchema()));
     }
     Tuple update_tuple(update_values, &table_info_->schema_);
-    count++;
+    std::cout << "更新后元组:" << update_tuple.GetValue(&child_executor_->GetOutputSchema(), 0).GetAs<int>() << " "
+              << update_tuple.GetValue(&child_executor_->GetOutputSchema(), 1).GetAs<int>() << std::endl;
+    update_tuple.SetRid(child_rid);
+    if (primary_key_index_ != nullptr) {
+      primary_change = CheckPrimaryModify(child_tuple, update_tuple, table_info_, primary_key_index_);
+      if (primary_change) {
+        break;
+      }
+    }
 
     // 被当前事务修改,更新undo_log
-    if (CheckSelfModify(table_info_->table_->GetTupleMeta(child_rid), tnx)) {
+    if (CheckSelfModify(child_tm, tnx)) {
       auto undo_log_link_opt = tnx_mgr->GetUndoLink(child_rid);
       if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
-        UndoLog new_undolog =
-            UpdateUndoLog(tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_), child_tuple, update_tuple,
-                          child_tm.is_deleted_, false, &child_executor_->GetOutputSchema());
+        UndoLog old_undolog = tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_);
+        UndoLog new_undolog = UpdateUndoLog(old_undolog, child_tuple, update_tuple, child_tm.is_deleted_, false,
+                                            &child_executor_->GetOutputSchema());
         tnx->ModifyUndoLog(undo_log_link_opt->prev_log_idx_, new_undolog);
       }
+      tnx->AppendWriteSet(table_info_->oid_, child_rid);
+      table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, update_tuple, child_rid, nullptr);
     } else {
+      // 更改in_process为真
+      bool change_in_process = InProcessLock(exec_ctx_, child_rid);
+      if (!change_in_process) {
+        tnx->SetTainted();
+        std::cout << "线程id" << std::this_thread::get_id() << "inprocess更改失败" << std::endl;
+        throw ExecutionException("change in_process fail when update ");
+      } else {
+        std::cout << "线程id" << std::this_thread::get_id() << "inprocess更改成功" << std::endl;
+        std::cout << "更新后元组:" << update_tuple.GetValue(&child_executor_->GetOutputSchema(), 0).GetAs<int>() << " "
+                  << update_tuple.GetValue(&child_executor_->GetOutputSchema(), 1).GetAs<int>() << std::endl;
+      }
+      // 检查写写冲突
+      if (CheckwwConflict(child_tm, tnx, tnx_mgr)) {
+        InProcessUnlock(exec_ctx_, child_rid);
+        tnx->SetTainted();
+        throw ExecutionException("wwconflict happen when update ");
+      }
+
       // 被其它事务修改，添加undo_log
-      UndoLog new_undolog =
-          GenerateUndoLog(child_tuple, update_tuple, table_info_->table_->GetTupleMeta(child_rid).is_deleted_, false,
-                          table_info_->table_->GetTupleMeta(child_rid).ts_, &child_executor_->GetOutputSchema());
+      UndoLog new_undolog = GenerateUndoLog(child_tuple, update_tuple, child_tm.is_deleted_, false, child_tm.ts_,
+                                            &child_executor_->GetOutputSchema());
       // 将之前最新的UndoLink作为新添加的UndoLog的前一个版本
       auto prev_link = tnx_mgr->GetUndoLink(child_rid);
       if (prev_link.has_value()) {
-        new_undolog.prev_version_ = tnx_mgr->GetUndoLink(child_rid).value();
+        new_undolog.prev_version_ = prev_link.value();
       }
       auto new_undolink = tnx->AppendUndoLog(new_undolog);
       // 更新最新undo版本
       auto new_ver_link = VersionUndoLink::FromOptionalUndoLink(new_undolink);
       BUSTUB_ASSERT(new_ver_link.has_value(), "update: new_ver_link is nullopt");
+      new_ver_link->in_progress_ = true;
       if (tnx_mgr->UpdateVersionLink(child_rid, new_ver_link)) {
         std::cout << "update versionlink succeed" << std::endl;
       } else {
         std::cout << "update versionlink fail" << std::endl;
       }
+      tnx->AppendWriteSet(table_info_->oid_, child_rid);
+      table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, update_tuple, child_rid, nullptr);
+      InProcessUnlock(exec_ctx_, child_rid);
     }
-    tnx->AppendWriteSet(table_info_->oid_, child_rid);
-    table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, update_tuple, child_rid, nullptr);
+    count++;
+  }
+
+  Schema child_schema = child_executor_->GetOutputSchema();
+  std::vector<std::pair<Tuple, RID>> primary_tuple_rids;
+  // 当主键被更新时，需要编写单独的逻辑来处理
+  if (primary_change) {
+    child_executor_->Init();
+    while (child_executor_->Next(&child_tuple, &child_rid)) {
+      DeleteFunction(exec_ctx_, child_schema, table_info_, tnx, tnx_mgr, child_tuple, child_rid);
+      primary_tuple_rids.emplace_back(child_tuple, child_rid);
+    }
+
+    for (auto tuple_rid : primary_tuple_rids) {
+      std::vector<Value> insert_values;
+      insert_values.reserve(plan_->target_expressions_.size());
+      for (const auto &expr : plan_->target_expressions_) {
+        insert_values.push_back(expr->Evaluate(&tuple_rid.first, child_executor_->GetOutputSchema()));
+      }
+      Tuple insert_tuple(insert_values, &table_info_->schema_);
+      insert_tuple.SetRid(tuple_rid.second);
+
+      InsertFunction(exec_ctx_, child_schema, primary_key_index_, table_info_, tnx, tnx_mgr, insert_tuple,
+                     tuple_rid.second);
+    }
   }
 
   std::vector<Value> res{{TypeId::INTEGER, count}};

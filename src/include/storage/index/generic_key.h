@@ -29,6 +29,7 @@ namespace bustub {
 template <size_t KeySize>
 class GenericKey {
  public:
+  // 将一个 Tuple 的数据复制到 GenericKey 的内部数据数组中。
   inline void SetFromKey(const Tuple &tuple) {
     // initialize to 0
     memset(data_, 0, KeySize);

@@ -43,7 +43,6 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
   auto txn_id = next_txn_id_++;
   auto txn = std::make_unique<Transaction>(txn_id, isolation_level);
   auto *txn_ref = txn.get();
-  std::cout << "txn_id:" << txn_id << "Begin:::txn_map_.size()" << txn_map_.size() << std::endl;
   txn_map_.insert(std::make_pair(txn_id, std::move(txn)));
 
   // TODO(fall2023): set the timestamps here. Watermark updated below.
@@ -168,7 +167,6 @@ void TransactionManager::GarbageCollection() {
       ++tuple_iter;
     }
 
-    std::cout << "11111111" << std::endl;
     std::vector<txn_id_t> del_ids;
     for (auto &txn_ : txn_map_) {
       size_t undo_nums = txn_.second->GetUndoLogNum();

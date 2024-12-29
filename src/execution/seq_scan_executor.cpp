@@ -45,6 +45,7 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if (rid_pos_ >= allrids_.size()) {
       return false;
     }
+    if_find = false;
     meta_and_tuple = table_heap_->GetTuple(allrids_[rid_pos_]);
     TupleMeta seq_meta = meta_and_tuple.first;
     Tuple seq_tuple = meta_and_tuple.second;
@@ -88,19 +89,19 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         }
       }
       // 获取之前符合要求的版本，undo_logs为空则说明没有目标元组
-      if (!undo_logs.empty()) {
-        auto retuple = ReconstructTuple(&GetOutputSchema(), seq_tuple, seq_meta, undo_logs);
-        if (!retuple.has_value()) {
-          continue;
-        } else {
-          *tuple = retuple.value();
-          *rid = seq_tuple.GetRid();
-          if_find = true;
-        }
-      } else {
+      // 获取之前符合要求的版本，undo_logs为空则说明没有目标元组
+      if (undo_logs.empty()) {
         continue;
       }
+      auto retuple = ReconstructTuple(&GetOutputSchema(), seq_tuple, seq_meta, undo_logs);
+      if (!retuple.has_value()) {
+        continue;
+      }
+      *tuple = retuple.value();
+      *rid = seq_tuple.GetRid();
+      if_find = true;
     }
+    // 不满足条件则查看下一个
   } while (!if_find || (plan_->filter_predicate_ != nullptr &&
                         !plan_->filter_predicate_->Evaluate(tuple, table_info->schema_).GetAs<bool>()));
 
