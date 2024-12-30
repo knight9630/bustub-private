@@ -82,6 +82,7 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
     // 被当前事务修改,更新undo_log
     if (self_modify) {
+      std::cout << "Update 自我修改" << std::endl;
       auto undo_log_link_opt = tnx_mgr->GetUndoLink(child_rid);
       if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
         UndoLog old_undolog = tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_);
@@ -93,6 +94,7 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
       table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, update_tuple, child_rid, nullptr);
     } else {
+      std::cout << "Update 其它修改" << std::endl;
       // 更改in_process为真
       bool change_in_process = InProcessLock(exec_ctx_, child_rid);
       if (!change_in_process) {

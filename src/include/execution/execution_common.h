@@ -16,7 +16,7 @@ class InProcessCheck {
  public:
   InProcessCheck(VersionUndoLink ver_link) : ver_link_(ver_link) {}
 
-  bool operator()(std::optional<VersionUndoLink> version_undolink) {
+  auto operator()(std::optional<VersionUndoLink> version_undolink) -> bool {
     if (!version_undolink.has_value()) {
       return false;
     }
