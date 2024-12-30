@@ -168,27 +168,27 @@ void TransactionManager::GarbageCollection() {
     }
 
     std::vector<txn_id_t> del_ids;
-    for (auto &txn_ : txn_map_) {
-      size_t undo_nums = txn_.second->GetUndoLogNum();
+    for (auto &txn : txn_map_) {
+      size_t undo_nums = txn.second->GetUndoLogNum();
       bool all_invalid = true;
       for (size_t i = 0; i < undo_nums; i++) {
-        if (!txn_.second->GetUndoLog(i).is_deleted_) {
+        if (!txn.second->GetUndoLog(i).is_deleted_) {
           all_invalid = false;
         }
       }
 
-      if (all_invalid && (txn_.second->GetTransactionState() == TransactionState::COMMITTED ||
-                          txn_.second->GetTransactionState() == TransactionState::ABORTED)) {
-        txn_.second->ClearUndoLog();
-        del_ids.emplace_back(txn_.first);
+      if (all_invalid && (txn.second->GetTransactionState() == TransactionState::COMMITTED ||
+                          txn.second->GetTransactionState() == TransactionState::ABORTED)) {
+        txn.second->ClearUndoLog();
+        del_ids.emplace_back(txn.first);
       }
     }
     for (const auto &id : del_ids) {
       txn_map_.erase(id);
     }
     std::cout << "剩余事务id:" << std::endl;
-    for (const auto &txn_ : txn_map_) {
-      std::cout << txn_.first << std::endl;
+    for (const auto &txn : txn_map_) {
+      std::cout << txn.first << std::endl;
     }
   }
 }

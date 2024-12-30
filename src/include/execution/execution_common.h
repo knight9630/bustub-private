@@ -14,7 +14,7 @@ namespace bustub {
 
 class InProcessCheck {
  public:
-  InProcessCheck(VersionUndoLink ver_link) : ver_link_(ver_link) {}
+  explicit InProcessCheck(VersionUndoLink ver_link) : ver_link_(ver_link) {}
 
   auto operator()(std::optional<VersionUndoLink> version_undolink) -> bool {
     if (!version_undolink.has_value()) {
@@ -49,8 +49,8 @@ auto CheckwwConflict(const TupleMeta &tm, const Transaction *tnx, const Transact
 auto CheckSelfModify(const TupleMeta &tm, const Transaction *tnx) -> bool;
 
 // 检查主键是否修改
-auto CheckPrimaryModify(Tuple &old_tuple, Tuple &new_tuple, const TableInfo *table_info,
-                        const IndexInfo *index_info) -> bool;
+auto CheckPrimaryModify(Tuple &old_tuple, Tuple &new_tuple, const TableInfo *table_info, const IndexInfo *index_info)
+    -> bool;
 
 auto InProcessLock(ExecutorContext *exec_ctx, RID rid) -> bool;
 
@@ -62,12 +62,12 @@ auto GenerateUndoLog(const Tuple &old_tuple, const Tuple &new_tuple, bool old_is
 auto UpdateUndoLog(const UndoLog &old_log, const Tuple &old_tuple, const Tuple &new_tuple, bool old_is_deleted,
                    bool new_is_deleted, const Schema *schema) -> UndoLog;
 
-void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const IndexInfo *primary_key_index_,
+void InsertFunction(ExecutorContext *exec_ctx_, const Schema &child_schema, const IndexInfo *primary_key_index_,
                     const TableInfo *table_info_, Transaction *tnx, TransactionManager *tnx_mgr, Tuple child_tuple,
                     RID child_rid);
 
-void DeleteFunction(ExecutorContext *exec_ctx_, Schema child_schema, const TableInfo *table_info_, Transaction *tnx,
-                    TransactionManager *tnx_mgr, const Tuple &child_tuple, const RID &child_rid);
+void DeleteFunction(ExecutorContext *exec_ctx_, const Schema &child_schema, const TableInfo *table_info_,
+                    Transaction *tnx, TransactionManager *tnx_mgr, const Tuple &child_tuple, const RID &child_rid);
 // Add new functions as needed... You are likely need to define some more functions.
 //
 // To give you a sense of what can be shared across executors / transaction manager, here are the

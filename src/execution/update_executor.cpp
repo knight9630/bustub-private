@@ -59,9 +59,6 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   while (child_executor_->Next(&child_tuple, &child_rid)) {
     has_updated_ = true;
     bool self_modify = CheckSelfModify(table_info_->table_->GetTupleMeta(child_rid), tnx);
-    std::cout << "update_executor" << std::endl;
-    std::cout << "更新前元组:" << child_tuple.GetValue(&child_executor_->GetOutputSchema(), 0).GetAs<int>() << " "
-              << child_tuple.GetValue(&child_executor_->GetOutputSchema(), 1).GetAs<int>() << std::endl;
 
     std::vector<Value> update_values;
     update_values.reserve(plan_->target_expressions_.size());
@@ -70,19 +67,15 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     }
     Tuple update_tuple(update_values, &child_executor_->GetOutputSchema());
     update_tuple.SetRid(child_rid);
-    std::cout << "更新后元组:" << update_tuple.GetValue(&child_executor_->GetOutputSchema(), 0).GetAs<int>() << " "
-              << update_tuple.GetValue(&child_executor_->GetOutputSchema(), 1).GetAs<int>() << std::endl;
     if (primary_key_index_ != nullptr) {
       primary_change = CheckPrimaryModify(child_tuple, update_tuple, table_info_, primary_key_index_);
       if (primary_change) {
-        std::cout << "主键修改update" << std::endl;
         break;
       }
     }
 
     // 被当前事务修改,更新undo_log
     if (self_modify) {
-      std::cout << "Update 自我修改" << std::endl;
       auto undo_log_link_opt = tnx_mgr->GetUndoLink(child_rid);
       if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
         UndoLog old_undolog = tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_);
@@ -94,7 +87,6 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
       table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, update_tuple, child_rid, nullptr);
     } else {
-      std::cout << "Update 其它修改" << std::endl;
       // 更改in_process为真
       bool change_in_process = InProcessLock(exec_ctx_, child_rid);
       if (!change_in_process) {
@@ -140,14 +132,13 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   std::vector<std::pair<Tuple, RID>> primary_tuple_rids;
   // 当主键被更新时，需要编写单独的逻辑来处理
   if (primary_change) {
-    std::cout << "主键修改！！！！！！！！" << std::endl;
     child_executor_->Init();
     while (child_executor_->Next(&child_tuple, &child_rid)) {
       primary_tuple_rids.emplace_back(child_tuple, child_rid);
       DeleteFunction(exec_ctx_, child_schema, table_info_, tnx, tnx_mgr, child_tuple, child_rid);
     }
 
-    for (auto tuple_rid : primary_tuple_rids) {
+    for (const auto &tuple_rid : primary_tuple_rids) {
       std::vector<Value> insert_values;
       insert_values.reserve(plan_->target_expressions_.size());
       for (const auto &expr : plan_->target_expressions_) {

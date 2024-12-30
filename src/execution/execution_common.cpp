@@ -49,7 +49,7 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
         attrs.emplace_back(i);
       }
     }
-    auto modified_schema = schema->CopySchema(schema, attrs);
+    auto modified_schema = bustub::Schema::CopySchema(schema, attrs);
 
     uint32_t modified_col_idx = 0;
     for (size_t i = 0; i < if_modified.size(); i++) {
@@ -71,21 +71,7 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
 // 2.事务 A 尝试更新 tuple 时，发现 tuple 的最新 timestamp 属于另一个 committed 的事务B，且 B commited timestamp > A
 // read timestamp
 auto CheckwwConflict(const TupleMeta &tm, const Transaction *tnx, const TransactionManager *tnx_mgr) -> bool {
-  std::cout << tm.ts_ << std::endl;
-  std::cout << tnx->GetReadTs() << std::endl;
-  std::cout << tnx->GetTransactionTempTs() << std::endl;
   return tm.ts_ > tnx->GetReadTs() && tm.ts_ != tnx->GetTransactionTempTs();
-  // for (const auto &id_tnx : tnx_mgr->txn_map_) {
-  //   if (tm.ts_ == id_tnx.first && tm.ts_ != tnx->GetTransactionTempTs()) {
-  //     return true;
-  //   }
-
-  //   if (tm.ts_ == id_tnx.second->GetCommitTs() && tm.ts_ > tnx->GetReadTs()) {
-  //     return true;
-  //   }
-  // }
-
-  // return false;
 }
 
 // 检查是否是本事务修改
@@ -94,8 +80,8 @@ auto CheckSelfModify(const TupleMeta &tm, const Transaction *tnx) -> bool {
 }
 
 // 检查主键是否修改
-auto CheckPrimaryModify(Tuple &old_tuple, Tuple &new_tuple, const TableInfo *table_info,
-                        const IndexInfo *index_info) -> bool {
+auto CheckPrimaryModify(Tuple &old_tuple, Tuple &new_tuple, const TableInfo *table_info, const IndexInfo *index_info)
+    -> bool {
   auto old_key_tuple =
       old_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
   auto new_key_tuple =
@@ -118,30 +104,28 @@ auto InProcessLock(ExecutorContext *exec_ctx, RID rid) -> bool {
 
 // 设置in_process为false
 void InProcessUnlock(ExecutorContext *exec_ctx, RID rid) {
-  auto vul = VersionUndoLink::FromOptionalUndoLink(exec_ctx->GetTransactionManager()->GetUndoLink(rid));
-  if (vul.has_value()) {
-    exec_ctx->GetTransactionManager()->UpdateVersionLink(rid, vul, nullptr);
+  auto ver_undolink = VersionUndoLink::FromOptionalUndoLink(exec_ctx->GetTransactionManager()->GetUndoLink(rid));
+  if (ver_undolink.has_value()) {
+    ver_undolink->in_progress_ = false;
+    exec_ctx->GetTransactionManager()->UpdateVersionLink(rid, ver_undolink, nullptr);
   }
 }
 
 auto CheckDeleteInsert(const UndoLog &undolog) -> bool {
-  for (size_t i = 0; i < undolog.modified_fields_.size(); i++) {
-    if (undolog.modified_fields_[i] == false) {
+  for (const auto &field : undolog.modified_fields_) {
+    if (!field) {
       return false;
     }
   }
-  if (undolog.tuple_.GetLength() != 0) {
-    return false;
-  }
 
-  return true;
+  return undolog.tuple_.GetLength() == 0;
 }
 
 auto GenerateUndoLog(const Tuple &old_tuple, const Tuple &new_tuple, bool old_is_deleted, bool new_is_deleted,
                      timestamp_t ts, const Schema *schema) -> UndoLog {
   // 删除/更新 一个被删除的元组，相当于加一个什么信息都没有的undolog
   if (old_is_deleted) {
-    return {true, {}, {}, ts};
+    return {false, std::vector<bool>(schema->GetColumnCount(), true), {}, ts};
   }
 
   // 用于delete算子，表示新元组被删除，
@@ -186,14 +170,15 @@ auto UpdateUndoLog(const UndoLog &old_log, const Tuple &old_tuple, const Tuple &
                    bool new_is_deleted, const Schema *schema) -> UndoLog {
   // 被当前事务删除后又进行 delete/update 将返回原undolog，从而undolog不变
   // 旧元组删除
-  if (old_is_deleted || old_log.is_deleted_) {
+  if (old_is_deleted) {
     return old_log;
   }
   // delete->insert->update
   // 插入时会产生一个空的undolog，再update保持不变
-  // if (CheckDeleteInsert(old_log)) {
-  //   return old_log;
-  // }
+  if (CheckDeleteInsert(old_log)) {
+    return old_log;
+  }
+  Schema old_modified_schema = GetSchemaofModifiedFields(schema, old_log.modified_fields_);
 
   // 新操作为删除操作，undolog要记录原来的tuple的所有值,将原undo_log中的已修改区域和其他区域都标记为已修改
   if (new_is_deleted) {
@@ -203,7 +188,6 @@ auto UpdateUndoLog(const UndoLog &old_log, const Tuple &old_tuple, const Tuple &
     for (uint32_t column_idx = 0; column_idx < schema->GetColumnCount(); column_idx++) {
       modified_fields.push_back(true);
       if (old_log.modified_fields_[column_idx]) {
-        Schema old_modified_schema = GetSchemaofModifiedFields(schema, old_log.modified_fields_);
         modified_values.push_back(old_log.tuple_.GetValue(&old_modified_schema, modified_idx));
         modified_idx++;
       } else {
@@ -228,7 +212,6 @@ auto UpdateUndoLog(const UndoLog &old_log, const Tuple &old_tuple, const Tuple &
      */
     if (old_log.modified_fields_[column_idx]) {
       new_modified_fields.push_back(true);
-      Schema old_modified_schema = GetSchemaofModifiedFields(schema, old_log.modified_fields_);
       new_modified_values.push_back(old_log.tuple_.GetValue(&old_modified_schema, modified_idx));
       modified_idx++;
       new_modified_attrs.push_back(column_idx);
@@ -245,7 +228,7 @@ auto UpdateUndoLog(const UndoLog &old_log, const Tuple &old_tuple, const Tuple &
           old_log.prev_version_};
 }
 
-void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const IndexInfo *primary_key_index_,
+void InsertFunction(ExecutorContext *exec_ctx_, const Schema &child_schema, const IndexInfo *primary_key_index_,
                     const TableInfo *table_info_, Transaction *tnx, TransactionManager *tnx_mgr, Tuple child_tuple,
                     RID child_rid) {
   // 如果主键索引存在，相同主键的tuple存在，并且tuple未删除，终止；反之，更新TupleMeta
@@ -257,12 +240,12 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
                                          primary_key_index_->index_->GetKeyAttrs());
     primary_key_index_->index_->ScanKey(key, &exist_rids, tnx);
     if (!exist_rids.empty()) {
-      if (!table_info_->table_->GetTupleMeta(exist_rids[0]).is_deleted_) {
-        tnx->SetTainted();
-        throw ExecutionException("inserted tuple has existed and not deleted!");
-      } else {
+      if (table_info_->table_->GetTupleMeta(exist_rids[0]).is_deleted_) {
         existed_rid = exist_rids[0];
         new_insert = false;
+      } else {
+        tnx->SetTainted();
+        throw ExecutionException("inserted tuple has existed and not deleted!");
       }
     }
   }
@@ -274,7 +257,6 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
 
     // 2.添加索引
     if (primary_key_index_ != nullptr) {
-      std::cout << "Insert 元组不存在" << std::endl;
       auto new_key = child_tuple.KeyFromTuple(table_info_->schema_, primary_key_index_->key_schema_,
                                               primary_key_index_->index_->GetKeyAttrs());
       bool insert_index = primary_key_index_->index_->InsertEntry(new_key, new_rid, exec_ctx_->GetTransaction());
@@ -286,9 +268,9 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
     }
     // 3.在版本链中插入一个占位空值
     if (tnx_mgr->UpdateUndoLink(new_rid, UndoLink{}, nullptr)) {
-      std::cout << "insert UndoLink插入成功" << std::endl;
+      std::cout << "insert UndoLink succeed" << std::endl;
     } else {
-      std::cout << "insert UndoLink插入失败" << std::endl;
+      std::cout << "insert UndoLink fail" << std::endl;
     }
     // 4.将创建的元组rid添加到当前事务的write set中
     tnx->AppendWriteSet(table_info_->oid_, new_rid);
@@ -298,7 +280,6 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
     // 被当前事务修改,更新undo_log（这里其实不变）
     bool self_modify = CheckSelfModify(table_info_->table_->GetTupleMeta(existed_rid), tnx);
     if (self_modify) {
-      std::cout << "Insert 元组存在 自我修改" << std::endl;
       auto undo_log_link_opt = tnx_mgr->GetUndoLink(existed_rid);
       if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
         UndoLog new_undolog = UpdateUndoLog(tnx->GetUndoLog(undo_log_link_opt->prev_log_idx_), child_tuple, {}, true,
@@ -307,7 +288,6 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
       }
       table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, child_tuple, existed_rid, nullptr);
     } else {
-      std::cout << "Insert 元组存在 其它修改" << std::endl;
       // 检查写写冲突
       if (CheckwwConflict(table_info_->table_->GetTupleMeta(existed_rid), tnx, tnx_mgr)) {
         InProcessUnlock(exec_ctx_, existed_rid);
@@ -348,12 +328,11 @@ void InsertFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Index
   }
 }
 
-void DeleteFunction(ExecutorContext *exec_ctx_, Schema child_schema, const TableInfo *table_info_, Transaction *tnx,
-                    TransactionManager *tnx_mgr, const Tuple &child_tuple, const RID &child_rid) {
+void DeleteFunction(ExecutorContext *exec_ctx_, const Schema &child_schema, const TableInfo *table_info_,
+                    Transaction *tnx, TransactionManager *tnx_mgr, const Tuple &child_tuple, const RID &child_rid) {
   bool self_modify = CheckSelfModify(table_info_->table_->GetTupleMeta(child_rid), tnx);
   // 被当前事务修改,更新undo_log
   if (self_modify) {
-    std::cout << "Delete 自我修改" << std::endl;
     auto undo_log_link_opt = tnx_mgr->GetUndoLink(child_rid);
     if (undo_log_link_opt.has_value() && undo_log_link_opt->IsValid()) {
       UndoLog new_undolog =
@@ -365,7 +344,6 @@ void DeleteFunction(ExecutorContext *exec_ctx_, Schema child_schema, const Table
     table_info_->table_->UpdateTupleMeta(TupleMeta{tnx->GetTransactionTempTs(), true}, child_rid);
   } else {
     //
-    std::cout << "Delete 其它修改" << std::endl;
     // 更改in_process为真
     bool change_in_process = InProcessLock(exec_ctx_, child_rid);
     if (!change_in_process) {
@@ -425,9 +403,8 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
         auto version_undolink = pg_ver_info->prev_version_[rid.GetSlotNum()];
         UndoLink undolink = version_undolink.prev_;
         while (undolink.IsValid()) {
-          std::cout << "事务id:" << undolink.prev_txn_ << " " << "undologs中位置:" << undolink.prev_log_idx_
-                    << std::endl;
-
+          std::cout << "事务id:" << undolink.prev_txn_ << " "
+                    << "undologs中位置:" << undolink.prev_log_idx_ << std::endl;
           auto undolog_opt = txn_mgr->GetUndoLogOptional(undolink);
           if (undolog_opt.has_value()) {
             UndoLog undolog = undolog_opt.value();
