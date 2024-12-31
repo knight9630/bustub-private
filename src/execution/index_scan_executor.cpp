@@ -32,20 +32,6 @@ void IndexScanExecutor::Init() {
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  // pro3
-  // auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
-  // TupleMeta meta{};
-  // do {
-  //   if (rid_pos_ >= all_index_rids_.size()) {
-  //     return false;
-  //   }
-  //   *rid = all_index_rids_[rid_pos_];
-  //   meta = table_info->table_->GetTupleMeta(*rid);
-  //   *tuple = table_info->table_->GetTuple(*rid).second;
-  //   rid_pos_++;
-  // } while (meta.is_deleted_);
-  // return true;
-
   // 虽然主键索引的结果只会有一个，但为了和顺序查询保持一致，还是用一样的结构
   std::pair<TupleMeta, Tuple> meta_and_tuple{};
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);

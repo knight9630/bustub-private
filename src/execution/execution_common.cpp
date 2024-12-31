@@ -288,18 +288,18 @@ void InsertFunction(ExecutorContext *exec_ctx_, const Schema &child_schema, cons
       }
       table_info_->table_->UpdateTupleInPlace({tnx->GetTransactionTempTs(), false}, child_tuple, existed_rid, nullptr);
     } else {
-      // 检查写写冲突
-      if (CheckwwConflict(table_info_->table_->GetTupleMeta(existed_rid), tnx, tnx_mgr)) {
-        InProcessUnlock(exec_ctx_, existed_rid);
-        tnx->SetTainted();
-        throw ExecutionException("wwconflict happen when insert ");
-      }
-
       // 更改in_process为真
       bool change_in_process = InProcessLock(exec_ctx_, existed_rid);
       if (!change_in_process) {
         tnx->SetTainted();
         throw ExecutionException("change in_process fail when insert ");
+      }
+
+      // 检查写写冲突
+      if (CheckwwConflict(table_info_->table_->GetTupleMeta(existed_rid), tnx, tnx_mgr)) {
+        InProcessUnlock(exec_ctx_, existed_rid);
+        tnx->SetTainted();
+        throw ExecutionException("wwconflict happen when insert ");
       }
 
       // 被其它事务修改，添加undo_log（其实是个空的）
