@@ -96,7 +96,7 @@ auto InProcessLock(ExecutorContext *exec_ctx, RID rid) -> bool {
     InProcessCheck in_pro_ch(ver_undolink.value());
     ver_undolink->in_progress_ = true;
     // 在此处得到一个inprocess=true的version_link后，其他线程可能会修改该version_link
-    // 所以会有check操作，保证修改的version_link是最新的（CAS问题）
+    // 所以会有check操作，保证修改的version_link还和之前一样（CAS问题）
     return exec_ctx->GetTransactionManager()->UpdateVersionLink(rid, ver_undolink, in_pro_ch);
   }
   return true;
