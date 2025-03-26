@@ -98,7 +98,7 @@ auto TransactionManager::GetUndoLink(RID rid) -> std::optional<UndoLink> {
 }
 
 // 这个函数可以应对undolog被删除的情况
-// undolog被删除时，undologlik还在
+// undolog被删除时，undologlink还在
 // 那么就会发生undolink能找到但是undolog不存在的情况，从而返回nullopt
 auto TransactionManager::GetUndoLogOptional(UndoLink link) -> std::optional<UndoLog> {
   std::shared_lock<std::shared_mutex> lck(txn_map_mutex_);

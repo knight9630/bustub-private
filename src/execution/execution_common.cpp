@@ -257,8 +257,10 @@ void InsertFunction(ExecutorContext *exec_ctx_, const Schema &child_schema, cons
 
     // 2.添加索引
     if (primary_key_index_ != nullptr) {
+      // 取出tuple中的索引列作为key
       auto new_key = child_tuple.KeyFromTuple(table_info_->schema_, primary_key_index_->key_schema_,
                                               primary_key_index_->index_->GetKeyAttrs());
+      // 根据key将rid放入最下层的bucket中
       bool insert_index = primary_key_index_->index_->InsertEntry(new_key, new_rid, exec_ctx_->GetTransaction());
       if (!insert_index) {
         table_info_->table_->UpdateTupleMeta({tnx->GetTransactionTempTs(), true}, new_rid);

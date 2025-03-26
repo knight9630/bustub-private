@@ -18,10 +18,11 @@
 namespace bustub {
 
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
-
+// 这里的lruk不是常规的维护两个链表的作法
+// 会将每一帧保存为LRUKNode，里面放前历史访问时间链表，然后从这个时间链表中去取第k次访问距离
 auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   std::scoped_lock<std::mutex> wlock(latch_);
-  bool ifsuccess = false;  // 有可能没有可驱逐的帧
+  bool ifsuccess = false;  // 有可能没有可驱逐的帧（pin_count>0，有线程在用，自然可以）
 
   bool inf_exist = false;  // 最近访问不足k次的帧，优先驱逐
   size_t inf_dis = 0;      // 小于k访问次的最早访问与当前时间差

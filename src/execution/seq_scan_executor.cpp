@@ -55,7 +55,7 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     auto tnx_mgr = exec_ctx_->GetTransactionManager();
     /**
      * 情况一：当前事务的id等于表堆中元组的时间戳，代表表堆中的元组正在被当前事务修改
-     * 情况二：当前事务读取时间戳大于等于表堆中元组的时间戳
+     * 情况二：当前事务读取时间戳大于等于表堆中元组的时间戳，表示被已提交的事务修改
      * 情况三：当前事务读取时间戳小于表堆中元组的时间戳，去undo_log中去看有没有符合要求的版本
      */
     if (tnx->GetTransactionTempTs() == seq_meta.ts_ || tnx->GetReadTs() >= seq_meta.ts_) {

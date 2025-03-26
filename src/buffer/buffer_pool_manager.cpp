@@ -22,7 +22,7 @@
 #include "storage/page/page_guard.h"
 
 namespace bustub {
-
+// 这里的frame_id代表的是在缓存池中的位置，page_id表示的是实际的数据页的页号
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
     : pool_size_(pool_size), disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)), log_manager_(log_manager) {
@@ -55,6 +55,8 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   }
   page_add = pages_ + frame_id;  // 首地址加num会自动变成加num*sizeof(Page)
 
+  // 缓存同步，写回法
+  // 把原本的脏页写回磁盘
   if (page_add->IsDirty()) {
     std::promise<bool> pr = disk_scheduler_->CreatePromise();
     std::future<bool> fu = pr.get_future();
@@ -124,7 +126,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   replacer_->RecordAccess(frame_id);
   replacer_->SetEvictable(frame_id, false);
 
-  // 读入内存
+  // 从磁盘读入内存
   std::promise<bool> pr2 = disk_scheduler_->CreatePromise();
   std::future<bool> fu2 = pr2.get_future();
   disk_scheduler_->Schedule({false, fetched_page->GetData(), fetched_page->GetPageId(), std::move(pr2)});
@@ -149,6 +151,7 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   return true;
 }
 
+// 写入磁盘
 auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   std::scoped_lock<std::mutex> sclock(latch_);
   if (page_id == INVALID_PAGE_ID) {
@@ -168,6 +171,7 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   return true;
 }
 
+// 全部写入磁盘
 void BufferPoolManager::FlushAllPages() {
   std::scoped_lock<std::mutex> sclock(latch_);
   for (size_t i = 0; i < pool_size_; i++) {

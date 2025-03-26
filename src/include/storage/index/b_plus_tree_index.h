@@ -29,7 +29,7 @@ class BPlusTreeIndex : public Index {
  public:
   BPlusTreeIndex(std::unique_ptr<IndexMetadata> &&metadata, BufferPoolManager *buffer_pool_manager);
 
-  auto InsertEntry(const Tuple &key, RID rid, Transaction *transaction) -> bool override;
+  void InsertEntry(const Tuple &key, RID rid, Transaction *transaction) override;
 
   void DeleteEntry(const Tuple &key, RID rid, Transaction *transaction) override;
 
@@ -45,19 +45,18 @@ class BPlusTreeIndex : public Index {
   // comparator for key
   KeyComparator comparator_;
   // container
-  std::shared_ptr<BPlusTree<KeyType, ValueType, KeyComparator>> container_;
+  BPlusTree<KeyType, ValueType, KeyComparator> container_;
 };
 
 /** We only support index table with one integer key for now in BusTub. Hardcode everything here. */
 
-constexpr static const auto TWO_INTEGER_SIZE_B_TREE = 8;
-using IntegerKeyType_BTree = GenericKey<TWO_INTEGER_SIZE_B_TREE>;
-using IntegerValueType_BTree = RID;
-using IntegerComparatorType_BTree = GenericComparator<TWO_INTEGER_SIZE_B_TREE>;
-using BPlusTreeIndexForTwoIntegerColumn =
-    BPlusTreeIndex<IntegerKeyType_BTree, IntegerValueType_BTree, IntegerComparatorType_BTree>;
-using BPlusTreeIndexIteratorForTwoIntegerColumn =
-    IndexIterator<IntegerKeyType_BTree, IntegerValueType_BTree, IntegerComparatorType_BTree>;
-using IntegerHashFunctionType = HashFunction<IntegerKeyType_BTree>;
+constexpr static const auto INTEGER_SIZE = 4;
+using IntegerKeyType = GenericKey<INTEGER_SIZE>;
+using IntegerValueType = RID;
+using IntegerComparatorType = GenericComparator<INTEGER_SIZE>;
+using BPlusTreeIndexForOneIntegerColumn = BPlusTreeIndex<IntegerKeyType, IntegerValueType, IntegerComparatorType>;
+using BPlusTreeIndexIteratorForOneIntegerColumn =
+    IndexIterator<IntegerKeyType, IntegerValueType, IntegerComparatorType>;
+using IntegerHashFunctionType = HashFunction<IntegerKeyType>;
 
 }  // namespace bustub

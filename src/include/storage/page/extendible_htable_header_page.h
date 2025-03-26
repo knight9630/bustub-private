@@ -77,6 +77,7 @@ class ExtendibleHTableHeaderPage {
   void PrintHeader() const;
 
  private:
+  // 存放directory所在的页id
   page_id_t directory_page_ids_[HTABLE_HEADER_ARRAY_SIZE];
   uint32_t max_depth_;
 };
